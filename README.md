@@ -2,6 +2,8 @@
 
 Application de **vision par ordinateur en temps réel** qui détecte jusqu'à **2 mains** devant la webcam et affiche le **chiffre correspondant au nombre de doigts levés** (de 0 à 10).
 
+> **Fonctionne paume ET dos de la main** · **Score lissé (médiane 7 frames)** · **Compteur FPS en temps réel**
+
 ---
 
 ## 📸 Aperçu
@@ -118,6 +120,40 @@ python main.py
 
 ## 🧠 Fonctionnement technique
 
+### Détection de l'orientation de la main
+
+Le module `core/hand_analyzer.py` détecte automatiquement si la **paume** ou le **dos** de la main fait face à la caméra grâce au **produit vectoriel** entre les landmarks 0 (poignet), 5 (index MCP) et 17 (auriculaire MCP). Cela permet de corriger la logique du pouce, dont la direction "levé" s'inverse selon l'orientation.
+
+| Orientation | Pouce | Index → Auriculaire |
+|---|---|---|
+| Dos face caméra | `TIP.x < BASE.x` (main droite) | `TIP.y < BASE.y` |
+| **Paume face caméra** | `TIP.x > BASE.x` (main droite) ← **corrigé** | `TIP.y < BASE.y` (inchangé) |
+
+### Lissage du score (médiane glissante)
+
+Pour éviter les **clignotements** quand MediaPipe hésite entre deux valeurs, le score est lissé via une **médiane glissante sur les 7 dernières frames** :
+
+```python
+from collections import deque
+import statistics
+
+score_buffer = deque(maxlen=7)
+score_buffer.append(raw_score)
+smooth_score = int(statistics.median(score_buffer))
+```
+
+> La médiane est préférée à la moyenne car elle est **insensible aux valeurs aberrantes** (ex : une frame où MediaPipe rate une main).
+
+### Compteur FPS
+
+Le nombre de frames par seconde est calculé **chaque seconde** et affiché en haut au centre de l'écran avec une couleur adaptative :
+
+| Couleur | Seuil | Interprétation |
+|---------|-------|---------------|
+| 🟢 Vert | ≥ 24 FPS | Fluide |
+| 🟠 Orange | ≥ 15 FPS | Acceptable |
+| 🔴 Rouge | < 15 FPS | Lent (fermer d'autres applications) |
+
 ### Détection des doigts
 
 MediaPipe renvoie **21 points (landmarks)** par main, numérotés de 0 à 20 :
@@ -143,7 +179,7 @@ MediaPipe renvoie **21 points (landmarks)** par main, numérotés de 0 à 20 :
 | Doigt | Critère "levé" |
 |-------|----------------|
 | Index, Majeur, Annulaire, Auriculaire | `TIP.y < BASE.y` (TIP plus haut que la base — axe Y inversé en image) |
-| Pouce | `TIP.x < BASE.x` (main droite) ou `TIP.x > BASE.x` (main gauche) — comparaison horizontale |
+| Pouce | Comparaison horizontale **corrigée selon l'orientation** de la main (paume ou dos) |
 
 ### Détection de la webcam
 
@@ -165,6 +201,9 @@ WIDTH, HEIGHT = 1280, 720
 # Seuils de confiance MediaPipe (entre 0.0 et 1.0)
 MIN_HAND_DETECTION_CONFIDENCE = 0.6
 MIN_TRACKING_CONFIDENCE       = 0.5
+
+# Nombre de frames pour le lissage du score (médiane glissante)
+SMOOTH_WINDOW = 7   # dans main.py
 
 # Couleurs (format BGR d'OpenCV)
 C_YELLOW = (0, 220, 255)  # Score principal
