@@ -85,18 +85,32 @@ class UIOverlay:
         cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
 
         # ── Score principal (centré horizontalement, avec ombre) ──────────────
-        text_score = f"{total_score}  -  {NOMBRES.get(total_score, '')}"
+        # 2 mains détectées → afficher l'opération complète : "G + D = total - NOM"
+        # 1 main ou 0      → afficher simplement            : "score - NOM"
+        if len(hand_details) == 2:
+            scores      = {side: score for side, score in hand_details}
+            left_score  = scores.get("Left",  0)
+            right_score = scores.get("Right", 0)
+            text_score  = (
+                f"{left_score}  +  {right_score}  =  "
+                f"{total_score}  -  {NOMBRES.get(total_score, '')}"
+            )
+            # Police plus petite pour que la ligne rentre dans la fenêtre
+            font_scale = 1.3
+        else:
+            text_score = f"{total_score}  -  {NOMBRES.get(total_score, '')}"
+            font_scale = 1.8
 
         # Mesure la taille du texte pour le centrer
-        text_size, _ = cv2.getTextSize(text_score, cv2.FONT_HERSHEY_DUPLEX, 1.8, 2)
+        text_size, _ = cv2.getTextSize(text_score, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)
         pos_score  = ((w - text_size[0]) // 2, h - 45)
         shadow_pos = (pos_score[0] + 2, pos_score[1] + 2)   # Décalage 2 px = ombre portée
 
         # Ombre épaisse noire, puis texte jaune par-dessus
         cv2.putText(frame, text_score, shadow_pos,
-                    cv2.FONT_HERSHEY_DUPLEX, 1.8, (0, 0, 0), 6, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_DUPLEX, font_scale, (0, 0, 0), 6, cv2.LINE_AA)
         cv2.putText(frame, text_score, pos_score,
-                    cv2.FONT_HERSHEY_DUPLEX, 1.8, C_YELLOW, 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_DUPLEX, font_scale, C_YELLOW, 2, cv2.LINE_AA)
 
         # ── Détail par main (bas gauche, une entrée par main détectée) ────────
         x_offset = 30

@@ -12,7 +12,8 @@ Application de **vision par ordinateur en temps réel** qui détecte jusqu'à **
 |-------|-----------------|
 | Poing fermé | **0 — ZERO** |
 | 1 doigt levé | **1 — UN** |
-| 2 mains × 5 doigts | **10 — DIX** |
+| 1 main × 3 + 1 main × 4 | **3 + 4 = 7 — SEPT** |
+| 2 mains × 5 doigts | **5 + 5 = 10 — DIX** |
 
 ---
 
@@ -127,7 +128,7 @@ Le module `core/hand_analyzer.py` détecte automatiquement si la **paume** ou le
 | Orientation | Pouce | Index → Auriculaire |
 |---|---|---|
 | Dos face caméra | `TIP.x < BASE.x` (main droite) | `TIP.y < BASE.y` |
-| **Paume face caméra** | `TIP.x > BASE.x` (main droite) ← **corrigé** | `TIP.y < BASE.y` (inchangé) |
+| **Paume face caméra** | `TIP.x > BASE.x` (main droite) | `TIP.y < BASE.y` (inchangé) |
 
 ### Lissage du score (médiane glissante)
 
