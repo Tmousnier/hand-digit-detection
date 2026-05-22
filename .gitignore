@@ -1,0 +1,26 @@
+# Environnement virtuel Python
+.venv/
+venv/
+env/
+
+# Modèle MediaPipe (téléchargé automatiquement, ~40 Mo — inutile de le versionner)
+*.task
+
+# Fichiers compilés Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Fichiers IDE JetBrains (PyCharm)
+.idea/
+
+# Fichiers IDE VS Code
+.vscode/
+
+# Fichiers système Windows
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+

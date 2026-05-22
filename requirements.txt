@@ -1,0 +1,11 @@
+# requirements.txt
+# ─────────────────
+# Dépendances du projet "Détection de chiffres avec les mains"
+#
+# Installation :
+#   pip install -r requirements.txt
+
+opencv-python>=4.8.0     # Capture vidéo, affichage et dessin (OpenCV)
+mediapipe>=0.10.0        # Détection des landmarks de la main (Google MediaPipe)
+numpy>=1.24.0            # Calculs matriciels sur les frames (utilisé par OpenCV)
+
