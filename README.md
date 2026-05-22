@@ -28,23 +28,35 @@ Application de **vision par ordinateur en temps réel** qui détecte jusqu'à **
 ## 📁 Structure du projet
 
 ```
-detection_main_chiffre/
+hand-digit-detection/
 │
-├── main.py                 ← Point d'entrée — lancer ce fichier
-├── config.py               ← Constantes : couleurs, chemins, seuils MediaPipe
-├── requirements.txt        ← Dépendances pip
-├── README.md               ← Ce fichier
+├── 📄 main.py               ← Point d'entrée — fichier à lancer
+├── 📄 config.py             ← Toutes les constantes (couleurs, chemins, seuils)
+├── 📄 requirements.txt      ← Dépendances Python à installer
+├── 📄 README.md             ← Documentation du projet
+├── 📄 .gitignore            ← Fichiers exclus de git (.venv, *.task, ...)
 │
-├── core/                   ← Logique métier
-│   ├── __init__.py
-│   ├── camera.py           ← Recherche et validation de la webcam
-│   ├── hand_analyzer.py    ← Squelette + comptage des doigts levés
-│   └── model.py            ← Téléchargement automatique du modèle IA
+├── 📂 core/                 ← Logique métier (traitement des données)
+│   ├── __init__.py          ← Marqueur de package Python
+│   ├── camera.py            ← Recherche et validation de la webcam
+│   ├── hand_analyzer.py     ← Comptage des doigts levés (21 landmarks)
+│   └── model.py             ← Téléchargement automatique du modèle IA
 │
-└── ui/                     ← Affichage graphique OpenCV
-    ├── __init__.py
-    └── overlay.py          ← Squelette, panneau de score, alertes caméra
+└── 📂 ui/                   ← Interface graphique (rendu OpenCV)
+    ├── __init__.py          ← Marqueur de package Python
+    └── overlay.py           ← Squelette de la main, score, alertes
 ```
+
+### Rôle de chaque fichier
+
+| Fichier | Responsabilité |
+|---------|---------------|
+| `main.py` | Orchestre les 5 étapes : modèle → caméra → fenêtre → détection → nettoyage |
+| `config.py` | **Source unique** de vérité pour toutes les constantes du projet |
+| `core/camera.py` | Trouve la première webcam réelle parmi les indices/backends disponibles |
+| `core/hand_analyzer.py` | Détermine si chaque doigt est levé à partir des 21 landmarks MediaPipe |
+| `core/model.py` | Télécharge le modèle `hand_landmarker.task` une seule fois |
+| `ui/overlay.py` | Dessine le squelette, le panneau de score et les messages d'erreur |
 
 ---
 

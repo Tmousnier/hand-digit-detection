@@ -4,14 +4,17 @@ main.py — Point d'entrée de l'application
 Détection et Reconnaissance de Chiffres (0 à 10) avec les Mains
 
 Structure du projet :
-    main.py                ← ce fichier : boucle principale
-    config.py              ← toutes les constantes (couleurs, chemins, seuils)
+    main.py                ← ce fichier : orchestre toutes les étapes
+    config.py              ← constantes : couleurs, chemins, seuils MediaPipe
+    requirements.txt       ← dépendances pip
+    │
     core/
-        camera.py          ← initialisation et validation de la webcam
-        hand_analyzer.py   ← comptage des doigts levés
-        model.py           ← téléchargement du modèle MediaPipe
+    ├── camera.py          ← recherche et validation de la webcam
+    ├── hand_analyzer.py   ← comptage des doigts levés (21 landmarks)
+    └── model.py           ← téléchargement automatique du modèle IA
+    │
     ui/
-        overlay.py         ← dessin du squelette, panneau de score, alertes
+    └── overlay.py         ← dessin squelette, panneau de score, alertes
 
 Utilisation :
     Lancez ce fichier directement. Pressez [Q] ou [Échap] pour quitter.
