@@ -1,19 +1,23 @@
 # 🖐️ Détection et Reconnaissance de Chiffres avec les Mains
 
-Application de **vision par ordinateur en temps réel** qui détecte jusqu'à **2 mains** devant la webcam et affiche le **chiffre correspondant au nombre de doigts levés** (de 0 à 10).
+Application de **vision par ordinateur en temps réel** qui détecte jusqu'à **2 mains** devant la webcam, affiche le chiffre correspondant et permet d'effectuer des **opérations mathématiques** avec les doigts.
 
-> **Fonctionne paume ET dos de la main** · **Score lissé (médiane 7 frames)** · **Compteur FPS en temps réel**
+> **Paume ET dos de la main** · **Score lissé (médiane 7 frames)** · **Compteur FPS** · **4 modes opératoires** · **Mode binaire (0–31)**
 
 ---
 
 ## 📸 Aperçu
 
-| Geste | Résultat affiché |
-|-------|-----------------|
-| Poing fermé | **0 — ZERO** |
-| 1 doigt levé | **1 — UN** |
-| 1 main × 3 + 1 main × 4 | **3 + 4 = 7 — SEPT** |
-| 2 mains × 5 doigts | **5 + 5 = 10 — DIX** |
+| Geste | Mode | Résultat affiché |
+|-------|------|-----------------|
+| Poing fermé | Normal | **0 — ZERO** |
+| 1 doigt levé | Normal | **1 — UN** |
+| Main G × 3 + Main D × 4 | Addition | **3 + 4 = 7 — SEPT** |
+| Main G × 5 − Main D × 2 | Soustraction | **5 - 2 = 3 — TROIS** |
+| Main G × 3 × Main D × 4 | Multiplication | **3 x 4 = 12** |
+| Main G × 6 ÷ Main D × 2 | Division | **6 / 2 = 3 — TROIS** |
+| Pouce + Index + Auriculaire | **Binaire** | **10011 = 19** |
+| 2 mains en binaire | Binaire + Addition | **10011 + 00110 = 25** |
 
 ---
 
@@ -34,7 +38,7 @@ Application de **vision par ordinateur en temps réel** qui détecte jusqu'à **
 hand-digit-detection/
 │
 ├── 📄 main.py               ← Point d'entrée — fichier à lancer
-├── 📄 config.py             ← Toutes les constantes (couleurs, chemins, seuils)
+├── 📄 config.py             ← Toutes les constantes (couleurs, chemins, modes)
 ├── 📄 requirements.txt      ← Dépendances Python à installer
 ├── 📄 README.md             ← Documentation du projet
 ├── 📄 .gitignore            ← Fichiers exclus de git (.venv, *.task, ...)
@@ -42,24 +46,24 @@ hand-digit-detection/
 ├── 📂 core/                 ← Logique métier (traitement des données)
 │   ├── __init__.py          ← Marqueur de package Python
 │   ├── camera.py            ← Recherche et validation de la webcam
-│   ├── hand_analyzer.py     ← Comptage des doigts levés (21 landmarks)
+│   ├── hand_analyzer.py     ← Comptage normal + binaire des doigts (21 landmarks)
 │   └── model.py             ← Téléchargement automatique du modèle IA
 │
 └── 📂 ui/                   ← Interface graphique (rendu OpenCV)
     ├── __init__.py          ← Marqueur de package Python
-    └── overlay.py           ← Squelette de la main, score, alertes
+    └── overlay.py           ← Squelette, score, badges de mode, alertes
 ```
 
 ### Rôle de chaque fichier
 
 | Fichier | Responsabilité |
 |---------|---------------|
-| `main.py` | Orchestre les 5 étapes : modèle → caméra → fenêtre → détection → nettoyage |
-| `config.py` | **Source unique** de vérité pour toutes les constantes du projet |
-| `core/camera.py` | Trouve la première webcam réelle parmi les indices/backends disponibles |
-| `core/hand_analyzer.py` | Détermine si chaque doigt est levé à partir des 21 landmarks MediaPipe |
+| `main.py` | Orchestre les étapes : modèle → caméra → détection → modes → affichage |
+| `config.py` | **Source unique** de vérité : couleurs, seuils, liste des modes opératoires |
+| `core/camera.py` | Trouve la première webcam réelle (critères mean + std) |
+| `core/hand_analyzer.py` | Comptage normal (0–5) et binaire (0–31) des doigts |
 | `core/model.py` | Télécharge le modèle `hand_landmarker.task` une seule fois |
-| `ui/overlay.py` | Dessine le squelette, le panneau de score et les messages d'erreur |
+| `ui/overlay.py` | Squelette, résultat, badges [M]/[B], FPS, alertes caméra |
 
 ---
 
@@ -68,8 +72,8 @@ hand-digit-detection/
 ### 1. Cloner / télécharger le projet
 
 ```bash
-git clone <url-du-repo>
-cd detection_main_chiffre
+git clone https://github.com/Tmousnier/hand-digit-detection.git
+cd hand-digit-detection
 ```
 
 ### 2. Créer un environnement virtuel
@@ -108,31 +112,80 @@ python main.py
 
 ## 🎮 Utilisation
 
-| Action | Commande |
-|--------|----------|
-| Quitter l'application | Touche **Q** ou **Échap** |
-| Fermer la fenêtre | Clic sur la **croix** ✕ |
+### Raccourcis clavier
 
-- Placez **1 ou 2 mains** face à la webcam.
-- Levez les doigts souhaités.
-- Le chiffre s'affiche en temps réel en bas de l'écran.
+| Touche | Action |
+|--------|--------|
+| **Q** ou **Échap** | Quitter l'application |
+| **M** | Changer de mode opératoire (Addition → Soustraction → Multiplication → Division) |
+| **B** | Activer / désactiver le mode binaire (0–31 par main) |
+| Croix ✕ | Fermer la fenêtre |
+
+### Interface
+
+```
+┌─────────────────────────────────────────────────┐
+│ Vision IA : Chiffres    28.4 FPS    [Q] Quitter │  ← haut
+│                                   [M] Addition  │
+│                                  [B] Binaire:ON │
+│                                                 │
+│               [squelette main]                  │  ← centre
+│                                                 │
+│  ┌──────────────────────────────────────────┐   │
+│  │        3  +  4  =  7  —  SEPT           │   │  ← bas
+│  │  Main G.: 3        Main D.: 4           │   │
+│  └──────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────┘
+```
 
 ---
 
 ## 🧠 Fonctionnement technique
 
+### Modes opératoires (touche M)
+
+Quand **2 mains** sont détectées, l'opération choisie est appliquée entre la main gauche et la main droite :
+
+| Mode | Symbole | Exemple (G=3, D=4) | Résultat |
+|------|---------|-------------------|---------|
+| Addition | `+` | `3 + 4` | `7 — SEPT` |
+| Soustraction | `-` | `3 - 4` | `-1` |
+| Multiplication | `x` | `3 x 4` | `12` |
+| Division | `/` | `3 / 4` | `0.75` |
+
+> Division par zéro → affiche `Err /0`
+> Le nom français n'est affiché que si le résultat est un entier entre 0 et 10.
+
+### Mode binaire (touche B)
+
+Chaque doigt représente un **bit** (puissance de 2) :
+
+| Doigt | Bit | Valeur |
+|-------|-----|--------|
+| Pouce | bit 0 | 1 |
+| Index | bit 1 | 2 |
+| Majeur | bit 2 | 4 |
+| Annulaire | bit 3 | 8 |
+| Auriculaire | bit 4 | 16 |
+
+**Maximum par main : 31** (tous les doigts levés = `11111` en binaire)
+
+Exemple : Pouce + Index + Auriculaire levés → `10011 = 19`
+
+Le mode binaire est **compatible avec les 4 opérateurs** : `M` + `B` pour combiner deux valeurs de 0 à 31.
+
 ### Détection de l'orientation de la main
 
-Le module `core/hand_analyzer.py` détecte automatiquement si la **paume** ou le **dos** de la main fait face à la caméra grâce au **produit vectoriel** entre les landmarks 0 (poignet), 5 (index MCP) et 17 (auriculaire MCP). Cela permet de corriger la logique du pouce, dont la direction "levé" s'inverse selon l'orientation.
+Le module `core/hand_analyzer.py` détecte automatiquement si la **paume** ou le **dos** de la main fait face à la caméra via le **produit vectoriel** entre les landmarks 0, 5 et 17 :
 
 | Orientation | Pouce | Index → Auriculaire |
 |---|---|---|
 | Dos face caméra | `TIP.x < BASE.x` (main droite) | `TIP.y < BASE.y` |
-| **Paume face caméra** | `TIP.x > BASE.x` (main droite) | `TIP.y < BASE.y` (inchangé) |
+| **Paume face caméra** | `TIP.x > BASE.x` (main droite) ← **corrigé** | `TIP.y < BASE.y` (inchangé) |
 
 ### Lissage du score (médiane glissante)
 
-Pour éviter les **clignotements** quand MediaPipe hésite entre deux valeurs, le score est lissé via une **médiane glissante sur les 7 dernières frames** :
+Pour éviter les **clignotements**, le score est lissé via une **médiane glissante sur 7 frames** :
 
 ```python
 from collections import deque
@@ -143,21 +196,15 @@ score_buffer.append(raw_score)
 smooth_score = int(statistics.median(score_buffer))
 ```
 
-> La médiane est préférée à la moyenne car elle est **insensible aux valeurs aberrantes** (ex : une frame où MediaPipe rate une main).
-
 ### Compteur FPS
-
-Le nombre de frames par seconde est calculé **chaque seconde** et affiché en haut au centre de l'écran avec une couleur adaptative :
 
 | Couleur | Seuil | Interprétation |
 |---------|-------|---------------|
 | 🟢 Vert | ≥ 24 FPS | Fluide |
 | 🟠 Orange | ≥ 15 FPS | Acceptable |
-| 🔴 Rouge | < 15 FPS | Lent (fermer d'autres applications) |
+| 🔴 Rouge | < 15 FPS | Lent |
 
-### Détection des doigts
-
-MediaPipe renvoie **21 points (landmarks)** par main, numérotés de 0 à 20 :
+### Détection des doigts (21 landmarks)
 
 ```
         8   12  16  20       ← Bouts de doigts (TIPs)
@@ -175,25 +222,17 @@ MediaPipe renvoie **21 points (landmarks)** par main, numérotés de 0 à 20 :
    1
 ```
 
-**Règle de détection :**
-
-| Doigt | Critère "levé" |
-|-------|----------------|
-| Index, Majeur, Annulaire, Auriculaire | `TIP.y < BASE.y` (TIP plus haut que la base — axe Y inversé en image) |
-| Pouce | Comparaison horizontale **corrigée selon l'orientation** de la main (paume ou dos) |
-
 ### Détection de la webcam
 
-Sur Windows, certains indices de caméra retournent un fond gris uniforme (dispositif virtuel).
 Le module `core/camera.py` valide chaque flux avec **deux critères** :
 - `mean > 10` → image non noire
-- `std > 15` → image non uniforme (rejette les placeholders)
+- `std > 15` → image non uniforme (rejette les fonds gris virtuels)
 
 ---
 
 ## 🔧 Configuration
 
-Tous les paramètres sont regroupés dans **`config.py`** :
+Tous les paramètres sont dans **`config.py`** :
 
 ```python
 # Résolution de la fenêtre
@@ -203,12 +242,21 @@ WIDTH, HEIGHT = 1280, 720
 MIN_HAND_DETECTION_CONFIDENCE = 0.6
 MIN_TRACKING_CONFIDENCE       = 0.5
 
-# Nombre de frames pour le lissage du score (médiane glissante)
-SMOOTH_WINDOW = 7   # dans main.py
+# Lissage du score
+SMOOTH_WINDOW = 7   # Nombre de frames pour la médiane glissante (dans main.py)
+
+# Modes opératoires disponibles (touche M pour cycler)
+MODES = [
+    {"symbol": "+", "label": "Addition"},
+    {"symbol": "-", "label": "Soustraction"},
+    {"symbol": "x", "label": "Multiplication"},
+    {"symbol": "/", "label": "Division"},
+]
 
 # Couleurs (format BGR d'OpenCV)
-C_YELLOW = (0, 220, 255)  # Score principal
-C_GREEN  = (0, 200, 80)   # Détail par main
+C_YELLOW = (0, 220, 255)   # Score principal
+C_GREEN  = (0, 200, 80)    # Détail par main / FPS fluide
+C_ORANGE = (0, 165, 255)   # Badge mode opératoire
 ```
 
 ---
@@ -219,12 +267,12 @@ C_GREEN  = (0, 200, 80)   # Détail par main
 |----------|----------|
 | **Aucune caméra détectée** | Vérifier les paramètres de confidentialité Windows → Caméra → autoriser Python |
 | **Image grise / fond neutre** | Fermer Teams, Zoom, OBS ou tout autre logiciel utilisant la caméra |
-| **L'application se ferme immédiatement** | Les touches ne sont acceptées qu'après **4 secondes** au démarrage (protection buffer clavier) |
+| **L'application se ferme immédiatement** | Les touches ne sont acceptées qu'après **4 secondes** (protection buffer clavier) |
 | **Modèle non trouvé** | Le fichier `hand_landmarker.task` est téléchargé automatiquement au premier lancement |
+| **Mode binaire instable** | Tenir la main bien perpendiculaire à la caméra pour une meilleure détection des bits |
 
 ---
 
 ## 📄 Licence
 
 Projet éducatif — libre d'utilisation et de modification.
-
