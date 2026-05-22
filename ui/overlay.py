@@ -15,7 +15,7 @@ import numpy as np
 from config import (
     WIDTH, HEIGHT, WINDOW_NAME, NOMBRES,
     C_DARK, C_WHITE, C_YELLOW, C_GREEN, C_BLUE,
-    C_JOINT, C_BONE, C_TIP, C_RED,
+    C_JOINT, C_BONE, C_TIP, C_RED, C_ORANGE,
 )
 from core.hand_analyzer import HandAnalyzer
 
@@ -61,74 +61,109 @@ class UIOverlay:
             cv2.circle(frame, (x, y), size, C_WHITE,  1, cv2.LINE_AA)  # Contour blanc
 
     @staticmethod
-    def draw_panel(frame, total_score: int, hand_details: list, fps: float = 0.0) -> None:
+    def draw_panel(frame, total_score: int, hand_details: list,
+                   fps: float = 0.0, mode: dict = None) -> None:
         """
         Affiche le panneau d'information superposé en bas et en haut de l'image.
 
         Contenu :
-            • En bas   — fond semi-transparent + score total centré + détail par main
-            • En haut  — titre à gauche + FPS au centre + raccourci "[Q] Quitter" à droite
+            • En bas   — fond semi-transparent + résultat centré + détail par main
+            • En haut  — titre | FPS | mode actif | [Q] Quitter
 
         Paramètres :
             frame        — image BGR OpenCV à modifier (modifiée en place)
             total_score  — nombre total de doigts levés LISSÉ (médiane glissante)
-            hand_details — liste de tuples (côté: str, score: int) pour chaque main
-            fps          — fréquence d'images calculée dans main.py (0 si inconnue)
+            hand_details — liste de tuples (côté: str, score: int) par main
+            fps          — fréquence d'images calculée dans main.py
+            mode         — dict {"symbol": "+", "label": "Addition"} depuis config.MODES
         """
+        if mode is None:
+            mode = {"symbol": "+", "label": "Addition"}
+
         h, w = frame.shape[:2]
 
         # ── Fond semi-transparent en bas de l'image ───────────────────────────
-        # On copie l'image, on peint un rectangle sombre par-dessus,
-        # puis on mélange (75 % opaque) avec l'original = effet translucide.
         overlay = frame.copy()
         cv2.rectangle(overlay, (0, h - 120), (w, h), C_DARK, -1)
         cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
 
-        # ── Score principal (centré horizontalement, avec ombre) ──────────────
-        # 2 mains détectées → afficher l'opération complète : "G + D = total - NOM"
-        # 1 main ou 0      → afficher simplement            : "score - NOM"
+        # ── Calcul et texte du résultat ───────────────────────────────────────
+        # 2 mains détectées → appliquer l'opération choisie entre les deux mains
+        # 1 main ou 0      → afficher simplement "score - NOM"
         if len(hand_details) == 2:
             scores      = {side: score for side, score in hand_details}
             left_score  = scores.get("Left",  0)
             right_score = scores.get("Right", 0)
-            text_score  = (
-                f"{left_score}  +  {right_score}  =  "
-                f"{total_score}  -  {NOMBRES.get(total_score, '')}"
-            )
-            # Police plus petite pour que la ligne rentre dans la fenêtre
-            font_scale = 1.3
+            sym         = mode["symbol"]
+
+            # Calcul du résultat selon le mode opératoire
+            if sym == "+":
+                result = left_score + right_score
+                result_str = str(result)
+            elif sym == "-":
+                result = left_score - right_score
+                result_str = str(result)
+            elif sym == "x":
+                result = left_score * right_score
+                result_str = str(result)
+            else:  # Division
+                if right_score == 0:
+                    result      = None
+                    result_str  = "Err /0"   # Division par zéro → erreur explicite
+                else:
+                    raw = left_score / right_score
+                    # Afficher entier si possible, sinon 2 décimales
+                    result     = raw
+                    result_str = str(int(raw)) if raw == int(raw) else f"{raw:.2f}"
+
+            # Nom français du résultat (uniquement si entier compris dans NOMBRES 0-10)
+            nom = NOMBRES.get(int(result), "") if (
+                result is not None and isinstance(result, (int, float))
+                and result == int(result) and 0 <= int(result) <= 10
+            ) else ""
+
+            suffix     = f"  -  {nom}" if nom else ""
+            text_score = f"{left_score}  {sym}  {right_score}  =  {result_str}{suffix}"
+            font_scale = 1.3   # Police réduite pour que la ligne rentre en 1280px
         else:
             text_score = f"{total_score}  -  {NOMBRES.get(total_score, '')}"
             font_scale = 1.8
 
-        # Mesure la taille du texte pour le centrer
+        # ── Score / résultat centré (avec ombre) ──────────────────────────────
         text_size, _ = cv2.getTextSize(text_score, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)
         pos_score  = ((w - text_size[0]) // 2, h - 45)
-        shadow_pos = (pos_score[0] + 2, pos_score[1] + 2)   # Décalage 2 px = ombre portée
+        shadow_pos = (pos_score[0] + 2, pos_score[1] + 2)
 
-        # Ombre épaisse noire, puis texte jaune par-dessus
         cv2.putText(frame, text_score, shadow_pos,
                     cv2.FONT_HERSHEY_DUPLEX, font_scale, (0, 0, 0), 6, cv2.LINE_AA)
         cv2.putText(frame, text_score, pos_score,
                     cv2.FONT_HERSHEY_DUPLEX, font_scale, C_YELLOW, 2, cv2.LINE_AA)
 
-        # ── Détail par main (bas gauche, une entrée par main détectée) ────────
+        # ── Détail par main (bas gauche) ──────────────────────────────────────
         x_offset = 30
         for side, score in hand_details:
             label = "Main D." if side == "Right" else "Main G."
             cv2.putText(frame, f"{label}: {score}", (x_offset, h - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, C_GREEN, 2, cv2.LINE_AA)
-            x_offset += 200   # Décalage horizontal pour la 2e main
+            x_offset += 200
 
         # ── Titre en haut à gauche ────────────────────────────────────────────
         cv2.putText(frame, "Vision IA : Chiffres avec les Mains", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, C_BLUE, 2, cv2.LINE_AA)
 
+        # ── Badge mode opératoire (en haut, sous le titre) ───────────────────
+        # Fond coloré arrondi + texte du mode actif + instruction touche M
+        mode_text  = f"Mode : {mode['label']}  ( M = changer )"
+        badge_size, _ = cv2.getTextSize(mode_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        bx, by = 20, 55   # Position du badge
+        cv2.rectangle(frame,
+                      (bx - 4, by - 16),
+                      (bx + badge_size[0] + 4, by + 4),
+                      C_ORANGE, -1)                          # Fond orange
+        cv2.putText(frame, mode_text, (bx, by),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_DARK, 1, cv2.LINE_AA)
+
         # ── FPS en haut au centre ─────────────────────────────────────────────
-        # Couleur adaptative selon la fluidité :
-        #   vert  (≥ 24 fps) → fluide
-        #   orange (≥ 15 fps) → acceptable
-        #   rouge  (< 15 fps) → lent
         fps_text  = f"{fps:.1f} FPS"
         fps_color = C_GREEN if fps >= 24 else (0, 165, 255) if fps >= 15 else C_RED
         fps_size, _ = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)

@@ -51,6 +51,7 @@ C_JOINT  = (0,   150, 255)   # Articulations normales (orange)
 C_BONE   = (180, 180, 180)   # Os / connexions entre points (gris clair)
 C_TIP    = (0,   255, 100)   # Bouts de doigts (vert clair)
 C_RED    = (0,   0,   255)   # Messages d'erreur caméra
+C_ORANGE = (0,   165, 255)   # Indicateur de mode actif
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,3 +74,15 @@ NOMBRES = {
     8: "HUIT",  9: "NEUF", 10: "DIX",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  MODES OPÉRATOIRES  (touche M pour changer de mode)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Liste des modes disponibles, dans l'ordre de rotation (touche M)
+# Chaque mode contient : symbole affiché, nom français, fonction de calcul
+MODES = [
+    {"symbol": "+", "label": "Addition"},
+    {"symbol": "-", "label": "Soustraction"},
+    {"symbol": "x", "label": "Multiplication"},
+    {"symbol": "/", "label": "Division"},
+]

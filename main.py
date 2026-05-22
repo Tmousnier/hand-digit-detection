@@ -39,6 +39,7 @@ from config import (
     MIN_HAND_DETECTION_CONFIDENCE,
     MIN_HAND_PRESENCE_CONFIDENCE,
     MIN_TRACKING_CONFIDENCE,
+    MODES,
 )
 from core.camera        import initialize_camera
 from core.hand_analyzer import HandAnalyzer
@@ -93,9 +94,13 @@ def main() -> None:
     with vision.HandLandmarker.create_from_options(options) as detector:
         frame_count = 0
 
-        # File glissante pour le lissage du score (médiane sur SMOOTH_WINDOW frames)
-        # → évite les clignotements quand MediaPipe hésite entre deux valeurs
+        # File glissante pour le lissage du score total (médiane sur SMOOTH_WINDOW frames)
+        # Empêche les sauts de valeur quand MediaPipe hésite entre deux résultats
         score_buffer = deque(maxlen=SMOOTH_WINDOW)
+
+        # ── Mode opératoire ───────────────────────────────────────────────────
+        # Touche M pour cycler entre Addition / Soustraction / Multiplication / Division
+        mode_index = 0   # Index dans la liste MODES de config.py
 
         # ── Calcul FPS ────────────────────────────────────────────────────────
         fps          = 0.0
@@ -168,7 +173,7 @@ def main() -> None:
             smooth_total = int(statistics.median(score_buffer))
 
             # ── Affichage ──────────────────────────────────────────────────────
-            UIOverlay.draw_panel(frame, smooth_total, hand_details, fps)
+            UIOverlay.draw_panel(frame, smooth_total, hand_details, fps, MODES[mode_index])
             cv2.imshow(WINDOW_NAME, frame)
 
             # ── Gestion du clavier ─────────────────────────────────────────────
@@ -178,6 +183,10 @@ def main() -> None:
                 if key in [ord("q"), ord("Q"), 27]:
                     print("Touche quitter detectee.")
                     break
+                # Touche M → cycle entre les 4 modes opératoires
+                if key in [ord("m"), ord("M")]:
+                    mode_index = (mode_index + 1) % len(MODES)
+                    print(f"[MODE] {MODES[mode_index]['label']}")
 
             # ── Détection de fermeture via la croix ────────────────────────────
             if frame_count > 30:
