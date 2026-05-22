@@ -86,11 +86,21 @@ class HandAnalyzer:
         # Composante Z du produit vectoriel A × B
         cross_z = ax * by - ay * bx
 
-        # Le signe s'interprète différemment selon la main (miroir horizontal)
+        # Résultat vérifié géométriquement (coordonnées image : y croît vers le bas) :
+        #
+        #   Main DROITE  →  cross_z < 0  =  paume face caméra
+        #                   cross_z > 0  =  dos face caméra
+        #
+        #   Main GAUCHE  →  cross_z > 0  =  paume face caméra
+        #                   cross_z < 0  =  dos face caméra
+        #
+        # Intuition : quand la paume fait face caméra, le landmark index (5)
+        # passe à DROITE du landmark auriculaire (17) pour la main droite,
+        # ce qui inverse le signe du produit vectoriel.
         if handedness_label == "Right":
-            return cross_z > 0   # Positif = paume face caméra pour main droite
+            return cross_z < 0   # Négatif = paume face caméra pour main droite
         else:
-            return cross_z < 0   # Négatif = paume face caméra pour main gauche
+            return cross_z > 0   # Positif  = paume face caméra pour main gauche
 
     @staticmethod
     def count_fingers(landmarks, handedness_label: str) -> int:
