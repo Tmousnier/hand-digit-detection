@@ -61,18 +61,19 @@ class UIOverlay:
             cv2.circle(frame, (x, y), size, C_WHITE,  1, cv2.LINE_AA)  # Contour blanc
 
     @staticmethod
-    def draw_panel(frame, total_score: int, hand_details: list) -> None:
+    def draw_panel(frame, total_score: int, hand_details: list, fps: float = 0.0) -> None:
         """
         Affiche le panneau d'information superposé en bas et en haut de l'image.
 
         Contenu :
             • En bas   — fond semi-transparent + score total centré + détail par main
-            • En haut  — titre à gauche + raccourci "[Q] Quitter" à droite
+            • En haut  — titre à gauche + FPS au centre + raccourci "[Q] Quitter" à droite
 
         Paramètres :
             frame        — image BGR OpenCV à modifier (modifiée en place)
-            total_score  — nombre total de doigts levés (0 à 10)
+            total_score  — nombre total de doigts levés LISSÉ (médiane glissante)
             hand_details — liste de tuples (côté: str, score: int) pour chaque main
+            fps          — fréquence d'images calculée dans main.py (0 si inconnue)
         """
         h, w = frame.shape[:2]
 
@@ -109,6 +110,18 @@ class UIOverlay:
         cv2.putText(frame, "Vision IA : Chiffres avec les Mains", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, C_BLUE, 2, cv2.LINE_AA)
 
+        # ── FPS en haut au centre ─────────────────────────────────────────────
+        # Couleur adaptative selon la fluidité :
+        #   vert  (≥ 24 fps) → fluide
+        #   orange (≥ 15 fps) → acceptable
+        #   rouge  (< 15 fps) → lent
+        fps_text  = f"{fps:.1f} FPS"
+        fps_color = C_GREEN if fps >= 24 else (0, 165, 255) if fps >= 15 else C_RED
+        fps_size, _ = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
+        fps_x = (w - fps_size[0]) // 2
+        cv2.putText(frame, fps_text, (fps_x, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, fps_color, 2, cv2.LINE_AA)
+
         # ── Raccourci clavier en haut à droite ────────────────────────────────
         cv2.putText(frame, "[Q] Quitter", (w - 140, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_WHITE, 1, cv2.LINE_AA)
@@ -117,7 +130,7 @@ class UIOverlay:
     def draw_camera_warning(frame, mean_value: float) -> None:
         """
         Affiche un avertissement en rouge sur la frame quand la webcam est
-        ouverte mais renvoie une image trop sombre (luminosité moyenne < 5).
+        ouverte, mais renvoie une image trop sombre (luminosité moyenne < 5).
 
         Causes possibles : caméra obturée, utilisée par une autre application
         (Teams, Zoom, OBS, etc.), ou pilote défaillant.

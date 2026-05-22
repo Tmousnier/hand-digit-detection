@@ -21,11 +21,17 @@ Utilisation :
 """
 
 import time
+import statistics
+from collections import deque
 
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
+
+# Nombre de frames conservées pour le lissage du score (médiane glissante)
+# → évite les clignotements quand MediaPipe hésite entre deux valeurs
+SMOOTH_WINDOW = 7
 
 from config import (
     MODEL_PATH, WINDOW_NAME, WIDTH, HEIGHT,
@@ -39,6 +45,9 @@ from core.hand_analyzer import HandAnalyzer
 from core.model         import download_model_if_needed
 from ui.overlay         import UIOverlay
 
+# Nombre de frames conservées pour le lissage (médiane glissante)
+SMOOTH_WINDOW = 7
+
 
 def main() -> None:
     """
@@ -48,7 +57,7 @@ def main() -> None:
         1. Téléchargement du modèle IA (une seule fois)
         2. Initialisation de la webcam
         3. Configuration du détecteur MediaPipe
-        4. Boucle vidéo : capture → détection → affichage → gestion du clavier
+        4. Boucle vidéo : capture → détection → lissage → affichage → clavier
         5. Nettoyage (libération caméra + fermeture fenêtres)
     """
 
@@ -59,7 +68,6 @@ def main() -> None:
     cap = initialize_camera()
 
     if cap is None:
-        # Aucune webcam valide → fenêtre d'erreur, puis on s'arrête
         print("[ERREUR] Aucune camera utilisable detectee.")
         UIOverlay.show_no_camera()
         return
@@ -67,11 +75,9 @@ def main() -> None:
     # ── Étape 3 : Fenêtre d'affichage ─────────────────────────────────────────
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(WINDOW_NAME, WIDTH, HEIGHT)
-    cv2.moveWindow(WINDOW_NAME, 100, 50)   # Position initiale à l'écran
+    cv2.moveWindow(WINDOW_NAME, 100, 50)
 
     # ── Étape 4 : Détecteur MediaPipe ─────────────────────────────────────────
-    # Mode VIDEO : traitement frame par frame avec timestamps réels.
-    # Plus performant que le mode IMAGE pour un flux continu.
     base_options = mp_python.BaseOptions(model_asset_path=MODEL_PATH)
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
@@ -87,92 +93,93 @@ def main() -> None:
     with vision.HandLandmarker.create_from_options(options) as detector:
         frame_count = 0
 
-        # ── Vidage du buffer clavier ───────────────────────────────────────
-        # Sur Windows, des touches résiduelles (ex : Entrée, Q) utilisées
-        # pour lancer le script depuis l'IDE restent dans le buffer clavier.
-        # On les élimine avant d'entrer dans la boucle.
+        # File glissante pour le lissage du score (médiane sur SMOOTH_WINDOW frames)
+        # → évite les clignotements quand MediaPipe hésite entre deux valeurs
+        score_buffer = deque(maxlen=SMOOTH_WINDOW)
+
+        # ── Calcul FPS ────────────────────────────────────────────────────────
+        fps          = 0.0
+        fps_timer    = time.time()   # Temps du dernier calcul FPS
+        fps_counter  = 0             # Nombre de frames depuis le dernier calcul
+
+        # ── Vidage du buffer clavier ───────────────────────────────────────────
         for _ in range(30):
             cv2.waitKey(1)
 
-        # ── Garde de démarrage : immunité clavier de 4 secondes ───────────
-        # Même après le vidage, certaines touches arrivent avec du retard.
-        # On les ignore pendant les 4 premières secondes.
+        # ── Garde de démarrage : immunité clavier de 4 secondes ───────────────
         start_time = time.time()
         print("[INFO] Touches ignorees pendant 4 secondes au demarrage...")
 
-        # ── Boucle de traitement vidéo ─────────────────────────────────────
+        # ── Boucle de traitement vidéo ─────────────────────────────────────────
         while True:
 
-            # Lecture d'une frame depuis la webcam
             ret, frame = cap.read()
 
             if not ret or frame is None:
-                # Lecture échouée (ponctuelle) → on réessaie à la prochaine itération
                 cv2.waitKey(10)
                 continue
 
-            frame_count += 1
+            frame_count  += 1
+            fps_counter  += 1
 
-            # Effet miroir : l'utilisateur voit sa main comme dans un vrai miroir
+            # ── Calcul du FPS (mis à jour toutes les secondes) ─────────────────
+            elapsed = time.time() - fps_timer
+            if elapsed >= 1.0:
+                fps        = fps_counter / elapsed
+                fps_counter = 0
+                fps_timer   = time.time()
+
+            # Effet miroir
             frame = cv2.flip(frame, 1)
 
-            # Vérification de la luminosité : si l'image est presque noire,
-            # la caméra ne transmet rien → avertissement et passage à la frame suivante
+            # Vérification luminosité
             if frame.mean() < 5:
                 UIOverlay.draw_camera_warning(frame, frame.mean())
-                UIOverlay.draw_panel(frame, 0, [])
+                UIOverlay.draw_panel(frame, 0, [], fps)
                 cv2.imshow(WINDOW_NAME, frame)
                 cv2.waitKey(1)
                 continue
 
-            # ── Préparation pour MediaPipe ─────────────────────────────────
-            # MediaPipe attend du RGB ; OpenCV fournit du BGR → conversion nécessaire
+            # ── Préparation pour MediaPipe ─────────────────────────────────────
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image  = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-
-            # Timestamp réel en millisecondes.
-            # MediaPipe VIDEO exige des timestamps strictement croissants et
-            # correspondant au temps réel. Un incrément fixe de +33 ms serait
-            # incorrect si une frame met plus ou moins longtemps à arriver.
             timestamp_ms = int(time.time() * 1000)
 
-            # ── Détection des mains ────────────────────────────────────────
+            # ── Détection des mains ────────────────────────────────────────────
             results = detector.detect_for_video(mp_image, timestamp_ms)
 
-            total_fingers = 0    # Nombre total de doigts levés (toutes mains)
-            hand_details  = []   # [(côté, score), ...] pour l'affichage détaillé
+            raw_total  = 0
+            hand_details = []
 
             if results.hand_landmarks and results.handedness:
                 for landmarks, handedness_list in zip(
                     results.hand_landmarks, results.handedness
                 ):
-                    # Récupération du côté ("Right" ou "Left")
-                    side = handedness_list[0].category_name
-
-                    # Dessin du squelette de la main sur la frame
+                    side  = handedness_list[0].category_name
                     UIOverlay.draw_skeleton(frame, landmarks)
-
-                    # Comptage des doigts levés pour cette main
                     score = HandAnalyzer.count_fingers(landmarks, side)
-
-                    total_fingers += score
+                    raw_total += score
                     hand_details.append((side, score))
 
-            # ── Affichage ──────────────────────────────────────────────────
-            UIOverlay.draw_panel(frame, total_fingers, hand_details)
+            # ── Lissage du score total (médiane glissante) ─────────────────────
+            # On empile les scores bruts des dernières SMOOTH_WINDOW frames,
+            # puis on prend la médiane pour éliminer les valeurs aberrantes.
+            score_buffer.append(raw_total)
+            smooth_total = int(statistics.median(score_buffer))
+
+            # ── Affichage ──────────────────────────────────────────────────────
+            UIOverlay.draw_panel(frame, smooth_total, hand_details, fps)
             cv2.imshow(WINDOW_NAME, frame)
 
-            # ── Gestion du clavier ─────────────────────────────────────────
+            # ── Gestion du clavier ─────────────────────────────────────────────
             key = cv2.waitKey(1) & 0xFF
 
-            # Quitter avec Q ou Échap (uniquement après la garde de 4 secondes)
             if time.time() - start_time > 4.0:
                 if key in [ord("q"), ord("Q"), 27]:
                     print("Touche quitter detectee.")
                     break
 
-            # ── Détection de fermeture via la croix de la fenêtre ─────────
-            # On attend 30 frames avant de surveiller pour éviter les faux positifs
+            # ── Détection de fermeture via la croix ────────────────────────────
             if frame_count > 30:
                 try:
                     if cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
@@ -182,8 +189,8 @@ def main() -> None:
                     break
 
     # ── Étape 5 : Nettoyage ───────────────────────────────────────────────────
-    cap.release()              # Libère la webcam pour les autres applications
-    cv2.destroyAllWindows()    # Ferme toutes les fenêtres OpenCV
+    cap.release()
+    cv2.destroyAllWindows()
     print(">>> Application fermee proprement.")
 
 
