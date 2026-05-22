@@ -151,18 +151,6 @@ class UIOverlay:
         cv2.putText(frame, "Vision IA : Chiffres avec les Mains", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, C_BLUE, 2, cv2.LINE_AA)
 
-        # ── Badge mode opératoire (en haut, sous le titre) ───────────────────
-        # Fond coloré arrondi + texte du mode actif + instruction touche M
-        mode_text  = f"Mode : {mode['label']}  ( M = changer )"
-        badge_size, _ = cv2.getTextSize(mode_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-        bx, by = 20, 55   # Position du badge
-        cv2.rectangle(frame,
-                      (bx - 4, by - 16),
-                      (bx + badge_size[0] + 4, by + 4),
-                      C_ORANGE, -1)                          # Fond orange
-        cv2.putText(frame, mode_text, (bx, by),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_DARK, 1, cv2.LINE_AA)
-
         # ── FPS en haut au centre ─────────────────────────────────────────────
         fps_text  = f"{fps:.1f} FPS"
         fps_color = C_GREEN if fps >= 24 else (0, 165, 255) if fps >= 15 else C_RED
@@ -174,6 +162,19 @@ class UIOverlay:
         # ── Raccourci clavier en haut à droite ────────────────────────────────
         cv2.putText(frame, "[Q] Quitter", (w - 140, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_WHITE, 1, cv2.LINE_AA)
+
+        # ── Badge mode opératoire (en haut à droite, sous [Q] Quitter) ───────
+        # Fond orange + texte du mode actif aligné à droite sous le bouton quitter
+        mode_text  = f"[M] {mode['label']}"
+        badge_size, _ = cv2.getTextSize(mode_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        bx = w - badge_size[0] - 8   # Aligné à droite
+        by = 68                       # Juste sous [Q] Quitter (qui est à y=40)
+        cv2.rectangle(frame,
+                      (bx - 4, by - 16),
+                      (bx + badge_size[0] + 4, by + 4),
+                      C_ORANGE, -1)                          # Fond orange
+        cv2.putText(frame, mode_text, (bx, by),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_DARK, 1, cv2.LINE_AA)
 
     @staticmethod
     def draw_camera_warning(frame, mean_value: float) -> None:
