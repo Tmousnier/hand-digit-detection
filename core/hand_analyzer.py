@@ -165,3 +165,51 @@ class HandAnalyzer:
                 count += 1
 
         return count
+
+    @staticmethod
+    def fingers_bits(landmarks, handedness_label: str) -> tuple:
+        """
+        Retourne l'état binaire de chaque doigt et la valeur entière correspondante.
+
+        En mode binaire, chaque doigt représente un bit :
+            Pouce       = bit 0  → valeur  1
+            Index       = bit 1  → valeur  2
+            Majeur      = bit 2  → valeur  4
+            Annulaire   = bit 3  → valeur  8
+            Auriculaire = bit 4  → valeur 16
+
+        Exemple : Pouce + Index + Auriculaire levés → bits = [1, 1, 0, 0, 1]
+                  valeur = 1 + 2 + 16 = 19
+
+        Retourne :
+            (bits, value)
+            bits  — liste de 5 entiers (0 ou 1) dans l'ordre [pouce, index, majeur, annulaire, aur.]
+            value — entier 0 à 31 (somme des valeurs de bits)
+        """
+        # Valeurs de bit associées à chaque doigt (puissances de 2)
+        BIT_VALUES = [1, 2, 4, 8, 16]
+
+        palm_facing  = HandAnalyzer.is_palm_facing(landmarks, handedness_label)
+        bits         = []
+
+        # ── Pouce (comparaison axe X, corrigée selon orientation) ────────────
+        thumb_tip_x  = landmarks[HandAnalyzer.FINGER_TIPS[0]].x
+        thumb_base_x = landmarks[HandAnalyzer.FINGER_BASES[0]].x
+
+        if handedness_label == "Right":
+            thumb_up = thumb_tip_x < thumb_base_x
+        else:
+            thumb_up = thumb_tip_x > thumb_base_x
+        if palm_facing:
+            thumb_up = not thumb_up
+        bits.append(1 if thumb_up else 0)
+
+        # ── Index, Majeur, Annulaire, Auriculaire (comparaison axe Y) ────────
+        for i in range(1, 5):
+            tip_y  = landmarks[HandAnalyzer.FINGER_TIPS[i]].y
+            base_y = landmarks[HandAnalyzer.FINGER_BASES[i]].y
+            bits.append(1 if tip_y < base_y else 0)
+
+        # Valeur entière = somme des bits × leur poids binaire
+        value = sum(b * v for b, v in zip(bits, BIT_VALUES))
+        return bits, value

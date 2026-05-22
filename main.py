@@ -102,6 +102,11 @@ def main() -> None:
         # Touche M pour cycler entre Addition / Soustraction / Multiplication / Division
         mode_index = 0   # Index dans la liste MODES de config.py
 
+        # ── Mode binaire ──────────────────────────────────────────────────────
+        # Touche B pour activer / désactiver le comptage binaire (0 à 31 par main)
+        # En mode binaire : chaque doigt = un bit (pouce=1, index=2, majeur=4, ...)
+        binary_mode = False
+
         # ── Calcul FPS ────────────────────────────────────────────────────────
         fps          = 0.0
         fps_timer    = time.time()   # Temps du dernier calcul FPS
@@ -153,18 +158,26 @@ def main() -> None:
             # ── Détection des mains ────────────────────────────────────────────
             results = detector.detect_for_video(mp_image, timestamp_ms)
 
-            raw_total  = 0
-            hand_details = []
+            raw_total    = 0
+            hand_details = []   # [(side, score, bits), ...]  bits=None si mode normal
 
             if results.hand_landmarks and results.handedness:
                 for landmarks, handedness_list in zip(
                     results.hand_landmarks, results.handedness
                 ):
-                    side  = handedness_list[0].category_name
+                    side = handedness_list[0].category_name
                     UIOverlay.draw_skeleton(frame, landmarks)
-                    score = HandAnalyzer.count_fingers(landmarks, side)
+
+                    if binary_mode:
+                        # Mode binaire : chaque doigt = un bit, valeur 0-31
+                        bits, score = HandAnalyzer.fingers_bits(landmarks, side)
+                    else:
+                        # Mode normal : compter le nombre de doigts levés (0-5)
+                        bits  = None
+                        score = HandAnalyzer.count_fingers(landmarks, side)
+
                     raw_total += score
-                    hand_details.append((side, score))
+                    hand_details.append((side, score, bits))
 
             # ── Lissage du score total (médiane glissante) ─────────────────────
             # On empile les scores bruts des dernières SMOOTH_WINDOW frames,
@@ -173,7 +186,8 @@ def main() -> None:
             smooth_total = int(statistics.median(score_buffer))
 
             # ── Affichage ──────────────────────────────────────────────────────
-            UIOverlay.draw_panel(frame, smooth_total, hand_details, fps, MODES[mode_index])
+            UIOverlay.draw_panel(frame, smooth_total, hand_details, fps,
+                                 MODES[mode_index], binary_mode)
             cv2.imshow(WINDOW_NAME, frame)
 
             # ── Gestion du clavier ─────────────────────────────────────────────
@@ -187,6 +201,11 @@ def main() -> None:
                 if key in [ord("m"), ord("M")]:
                     mode_index = (mode_index + 1) % len(MODES)
                     print(f"[MODE] {MODES[mode_index]['label']}")
+                # Touche B → active / désactive le mode binaire
+                if key in [ord("b"), ord("B")]:
+                    binary_mode = not binary_mode
+                    state = "ON" if binary_mode else "OFF"
+                    print(f"[BINAIRE] Mode binaire {state}")
 
             # ── Détection de fermeture via la croix ────────────────────────────
             if frame_count > 30:

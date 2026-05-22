@@ -62,20 +62,19 @@ class UIOverlay:
 
     @staticmethod
     def draw_panel(frame, total_score: int, hand_details: list,
-                   fps: float = 0.0, mode: dict = None) -> None:
+                   fps: float = 0.0, mode: dict = None,
+                   binary_mode: bool = False) -> None:
         """
         Affiche le panneau d'information superposé en bas et en haut de l'image.
 
-        Contenu :
-            • En bas   — fond semi-transparent + résultat centré + détail par main
-            • En haut  — titre | FPS | mode actif | [Q] Quitter
-
         Paramètres :
             frame        — image BGR OpenCV à modifier (modifiée en place)
-            total_score  — nombre total de doigts levés LISSÉ (médiane glissante)
-            hand_details — liste de tuples (côté: str, score: int) par main
+            total_score  — score total lissé
+            hand_details — liste de tuples (côté, score, bits) par main
+                           bits = liste [0/1] × 5 en mode binaire, None sinon
             fps          — fréquence d'images calculée dans main.py
-            mode         — dict {"symbol": "+", "label": "Addition"} depuis config.MODES
+            mode         — dict {"symbol": "+", "label": "Addition"}
+            binary_mode  — True = comptage binaire actif (0 à 31 par main)
         """
         if mode is None:
             mode = {"symbol": "+", "label": "Addition"}
@@ -88,15 +87,13 @@ class UIOverlay:
         cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
 
         # ── Calcul et texte du résultat ───────────────────────────────────────
-        # 2 mains détectées → appliquer l'opération choisie entre les deux mains
-        # 1 main ou 0      → afficher simplement "score - NOM"
         if len(hand_details) == 2:
-            scores      = {side: score for side, score in hand_details}
+            scores      = {side: score for side, score in
+                           [(s, sc) for s, sc, _ in hand_details]}
             left_score  = scores.get("Left",  0)
             right_score = scores.get("Right", 0)
             sym         = mode["symbol"]
 
-            # Calcul du résultat selon le mode opératoire
             if sym == "+":
                 result = left_score + right_score
                 result_str = str(result)
@@ -106,30 +103,34 @@ class UIOverlay:
             elif sym == "x":
                 result = left_score * right_score
                 result_str = str(result)
-            else:  # Division
+            else:
                 if right_score == 0:
-                    result      = None
-                    result_str  = "Err /0"   # Division par zéro → erreur explicite
+                    result     = None
+                    result_str = "Err /0"
                 else:
-                    raw = left_score / right_score
-                    # Afficher entier si possible, sinon 2 décimales
+                    raw        = left_score / right_score
                     result     = raw
                     result_str = str(int(raw)) if raw == int(raw) else f"{raw:.2f}"
 
-            # Nom français du résultat (uniquement si entier compris dans NOMBRES 0-10)
-            nom = NOMBRES.get(int(result), "") if (
-                result is not None and isinstance(result, (int, float))
-                and result == int(result) and 0 <= int(result) <= 10
-            ) else ""
-
+            nom = ""
+            if result is not None and isinstance(result, (int, float)):
+                if result == int(result) and 0 <= int(result) <= 10:
+                    nom = NOMBRES.get(int(result), "")
             suffix     = f"  -  {nom}" if nom else ""
             text_score = f"{left_score}  {sym}  {right_score}  =  {result_str}{suffix}"
-            font_scale = 1.3   # Police réduite pour que la ligne rentre en 1280px
+            font_scale = 1.3
+        elif len(hand_details) == 1 and binary_mode:
+            # Mode binaire 1 main : afficher "01011 = 19"
+            _, score, bits = hand_details[0]
+            bits_str   = "".join(str(b) for b in reversed(bits))  # MSB à gauche
+            text_score = f"{bits_str}  =  {score}"
+            font_scale = 1.8
         else:
-            text_score = f"{total_score}  -  {NOMBRES.get(total_score, '')}"
+            score_val  = hand_details[0][1] if hand_details else total_score
+            text_score = f"{score_val}  -  {NOMBRES.get(score_val, '')}"
             font_scale = 1.8
 
-        # ── Score / résultat centré (avec ombre) ──────────────────────────────
+        # ── Score centré avec ombre ────────────────────────────────────────────
         text_size, _ = cv2.getTextSize(text_score, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)
         pos_score  = ((w - text_size[0]) // 2, h - 45)
         shadow_pos = (pos_score[0] + 2, pos_score[1] + 2)
@@ -141,11 +142,16 @@ class UIOverlay:
 
         # ── Détail par main (bas gauche) ──────────────────────────────────────
         x_offset = 30
-        for side, score in hand_details:
+        for side, score, bits in hand_details:
             label = "Main D." if side == "Right" else "Main G."
-            cv2.putText(frame, f"{label}: {score}", (x_offset, h - 15),
+            if binary_mode and bits is not None:
+                bits_str   = "".join(str(b) for b in reversed(bits))
+                detail_txt = f"{label}: {bits_str} = {score}"
+            else:
+                detail_txt = f"{label}: {score}"
+            cv2.putText(frame, detail_txt, (x_offset, h - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, C_GREEN, 2, cv2.LINE_AA)
-            x_offset += 200
+            x_offset += 280
 
         # ── Titre en haut à gauche ────────────────────────────────────────────
         cv2.putText(frame, "Vision IA : Chiffres avec les Mains", (20, 40),
@@ -163,18 +169,26 @@ class UIOverlay:
         cv2.putText(frame, "[Q] Quitter", (w - 140, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_WHITE, 1, cv2.LINE_AA)
 
-        # ── Badge mode opératoire (en haut à droite, sous [Q] Quitter) ───────
-        # Fond orange + texte du mode actif aligné à droite sous le bouton quitter
+        # ── Badge mode opératoire (à droite, sous [Q] Quitter) ────────────────
         mode_text  = f"[M] {mode['label']}"
         badge_size, _ = cv2.getTextSize(mode_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-        bx = w - badge_size[0] - 8   # Aligné à droite
-        by = 68                       # Juste sous [Q] Quitter (qui est à y=40)
-        cv2.rectangle(frame,
-                      (bx - 4, by - 16),
-                      (bx + badge_size[0] + 4, by + 4),
-                      C_ORANGE, -1)                          # Fond orange
+        bx = w - badge_size[0] - 8
+        by = 68
+        cv2.rectangle(frame, (bx - 4, by - 16), (bx + badge_size[0] + 4, by + 4),
+                      C_ORANGE, -1)
         cv2.putText(frame, mode_text, (bx, by),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_DARK, 1, cv2.LINE_AA)
+
+        # ── Badge mode binaire (à droite, sous le badge mode) ────────────────
+        bin_label  = "[B] Binaire : ON" if binary_mode else "[B] Binaire : OFF"
+        bin_color  = C_GREEN if binary_mode else (100, 100, 100)   # Vert=ON, Gris=OFF
+        bin_size, _ = cv2.getTextSize(bin_label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        bx2 = w - bin_size[0] - 8
+        by2 = 96   # Juste sous le badge mode (68 + ~28px)
+        cv2.rectangle(frame, (bx2 - 4, by2 - 16), (bx2 + bin_size[0] + 4, by2 + 4),
+                      bin_color, -1)
+        cv2.putText(frame, bin_label, (bx2, by2),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, C_WHITE, 1, cv2.LINE_AA)
 
     @staticmethod
     def draw_camera_warning(frame, mean_value: float) -> None:
